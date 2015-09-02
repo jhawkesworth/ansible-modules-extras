@@ -19,6 +19,32 @@
 # WANT_JSON
 # POWERSHELL_COMMON
 
+# credits: http://blogs.technet.com/b/stefan_gossner/archive/2010/05/07/using-csharp-c-code-in-powershell-scripts.aspx
+# https://social.msdn.microsoft.com/Forums/windows/en-US/ce540c7d-a113-4f39-956e-0af6bc91abd3/force-updaterefresh-of-windows-start-menu?forum=winforms
+
+$scn_class=@"
+
+using System.Text;
+using System;
+using System.Runtime.InteropServices;
+
+public static class SettingChangeNotifier
+ {
+  [DllImport("user32.dll", SetLastError = true)]
+  private static extern IntPtr SendMessageTimeout ( IntPtr hWnd, int Msg, IntPtr wParam, string lParam, uint fuFlags, uint uTimeout, IntPtr lpdwResult );
+  private static readonly IntPtr HWND_BROADCAST = new IntPtr(0xffff);
+  private const int WM_SETTINGCHANGE = 0x1a;
+  private const int SMTO_ABORTIFHUNG = 0x0002;
+
+  public static void notify ()
+  {
+   SendMessageTimeout(HWND_BROADCAST, WM_SETTINGCHANGE, IntPtr.Zero, null, SMTO_ABORTIFHUNG, 100, IntPtr.Zero);
+  }
+ }
+"@
+
+Add-Type -TypeDefinition $scn_class
+	
 $params = Parse-Args $args;
 $result = New-Object PSObject;
 Set-Attr $result "changed" $false;
@@ -52,8 +78,10 @@ $before_value = [Environment]::GetEnvironmentVariable($name, $level)
 
 if ($state -eq "present" ) {
    [Environment]::SetEnvironmentVariable($name, $value, $level)
+   [SettingChangeNotifier]::notify()
 } Elseif ($state -eq "absent") {
    [Environment]::SetEnvironmentVariable($name, $null, $level)
+   [SettingChangeNotifier]::notify()
 }
 
 $after_value = [Environment]::GetEnvironmentVariable($name, $level)
